@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ThermoDrive ML Dashboard</title>
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--ink:#0b1220;--mut:#5b6b82;--line:#e2e8f0;--acc:#f97316;--cy:#0891b2;--ok:#16a34a;--bad:#dc2626;--ml:#7c3aed;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root:not([data-theme="light"]){}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1220;--card:#16233a;--ink:#f3f5f9;--mut:#9fb0c6;--line:#27384f;--cy:#22d3ee;--ok:#22c55e;--bad:#ef4444;--ml:#a78bfa}}
+:root[data-theme="dark"]{--bg:#0b1220;--card:#16233a;--ink:#f3f5f9;--mut:#9fb0c6;--line:#27384f;--cy:#22d3ee;--ok:#22c55e;--bad:#ef4444;--ml:#a78bfa}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 Calibri,"Segoe UI",system-ui,sans-serif}
+.w{max-width:1100px;margin:0 auto;padding:20px 16px 40px}
+h1{font:700 26px Cambria,Georgia,serif;margin:0}.k{color:var(--acc);font-weight:700;letter-spacing:.2em;font-size:12px}
+.sub{color:var(--mut);margin:2px 0 16px}
+.g{display:grid;gap:12px}.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.g2{grid-template-columns:2fr 1fr}
+@media(max-width:800px){.g2{grid-template-columns:1fr}}
+.c{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.l{color:var(--mut);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.v{font:700 34px Cambria,Georgia,serif}.u{font-size:14px;color:var(--mut)}
+.leds{display:flex;gap:24px;justify-content:center;margin:10px 0 4px}
+.led{width:54px;height:54px;border-radius:50%;background:var(--line);transition:.2s}
+.led.g1{background:var(--ok);box-shadow:0 0 22px var(--ok)}.led.r1{background:var(--bad);box-shadow:0 0 22px var(--bad)}
+.lc{text-align:center;font-size:12px;color:var(--mut);font-weight:700}
+canvas{width:100%;height:300px;display:block}
+.lg{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--mut);margin-top:6px}.lg i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+button,select{font:inherit;padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.p{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:700}
+input[type=range]{accent-color:var(--acc);width:180px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:7px 4px;text-align:left;border-bottom:1px solid var(--line)}th{color:var(--mut);font-size:12px}
+.b{font-weight:700}.best{color:var(--ml)}
+code{font:12px "Courier New",monospace;color:var(--mut);word-break:break-word}
+.pill{display:inline-block;padding:3px 12px;border-radius:99px;font-weight:700;font-size:13px;color:#fff}
+</style></head><body><div class="w">
+<div class="k">STM32F401RE · LM35 · RED/GREEN LED</div><h1>ThermoDrive ML Dashboard</h1>
+<p class="sub">Live temperature, firmware prediction vs trained ML prediction, and the LED decision.</p>
+<div class="ctl"><button class="p" id="pl">Pause</button>
+<select id="mode"><option value="r">Replay dataset</option><option value="m">Manual heat source</option><option value="a">Live from sensor (API)</option></select>
+<label id="mw" hidden>Heat source <b id="mv">30</b> °C <input type="range" id="ms" min="25" max="90" value="30"></label>
+<label>Speed <select id="sp"><option value="1000">1×</option><option value="250" selected>4×</option><option value="100">10×</option></select></label>
+<button id="th">Theme</button></div>
+<div class="g g4">
+<div class="c"><div class="l">Live LM35</div><div class="v" id="t">–</div><div class="u" id="rw">ADC –</div></div>
+<div class="c"><div class="l">Firmware prediction</div><div class="v" id="fw">–</div><div class="u">T + 5 × drift</div></div>
+<div class="c"><div class="l" style="color:var(--ml)">ML prediction (+5 s)</div><div class="v" id="ml">–</div><div class="u" id="dr">drift –</div></div>
+<div class="c"><div class="leds"><div><div class="led" id="lg"></div><div class="lc">GREEN PB0</div></div><div><div class="led" id="lr"></div><div class="lc">RED PB1</div></div></div><div style="text-align:center"><span class="pill" id="st">–</span></div></div>
+</div>
+<div class="g g2" style="margin-top:12px">
+<div class="c"><div class="l">Temperature (last 2 min)</div><canvas id="cv"></canvas>
+<div class="lg"><span><i style="background:var(--cy)"></i>Live</span><span><i style="background:var(--acc)"></i>Firmware pred.</span><span><i style="background:var(--ml)"></i>ML pred. (+5 s)</span><span><i style="background:var(--bad)"></i>50 °C limit</span></div></div>
+<div class="g"><div class="c"><div class="l">Model performance (held-out 25%)</div>
+<table><tr><th>Model</th><th>MAE °C</th></tr><tbody id="tb"></tbody></table>
+<table style="margin-top:8px"><tr><th>Red-LED accuracy</th><th></th></tr><tr><td>Firmware rule</td><td class="b" id="a1"></td></tr><tr><td>ML model</td><td class="b best" id="a2"></td></tr></table></div>
+<div class="c"><div class="l">Session</div><table><tr><td>Samples</td><td class="b" id="n">0</td></tr><tr><td>Red alerts (ML)</td><td class="b" id="ra">0</td></tr><tr><td>ML early warnings*</td><td class="b" id="ew">0</td></tr></table>
+<div class="u" style="margin-top:6px">*ML went red while the firmware rule was still green.</div></div></div></div>
+<div class="c" style="margin-top:12px"><div class="l">Deployed model</div><code id="eq"></code></div>
+</div>
+<script>
+const D={"w": [3.007856071175106, -0.5223741727996618, -0.014084130727003805, -2.0274072942227863], "b": 0.7463793775891432, "f": ["T", "d1", "d3", "m5"], "raw": [381, 381, 382, 379, 377, 379, 370, 382, 386, 377, 375, 380, 375, 381, 376, 376, 370, 372, 368, 372, 375, 374, 370, 371, 367, 373, 365, 375, 369, 372, 363, 369, 370, 365, 371, 384, 389, 396, 404, 414, 422, 433, 446, 445, 456, 469, 462, 473, 487, 493, 498, 501, 521, 522, 529, 531, 539, 548, 549, 554, 563, 571, 573, 575, 585, 587, 590, 601, 606, 607, 616, 617, 615, 621, 628, 630, 635, 632, 648, 646, 652, 648, 659, 661, 668, 670, 674, 670, 670, 677, 674, 689, 693, 685, 702, 701, 699, 699, 702, 708, 708, 703, 703, 705, 705, 701, 699, 702, 699, 691, 693, 692, 698, 697, 695, 699, 695, 694, 699, 689, 688, 689, 691, 690, 694, 691, 691, 685, 688, 694, 693, 687, 694, 693, 693, 693, 692, 690, 692, 690, 688, 684, 689, 685, 687, 670, 648, 647, 640, 631, 621, 611, 599, 590, 584, 586, 576, 557, 554, 545, 541, 529, 531, 535, 523, 515, 513, 505, 500, 498, 491, 483, 479, 482, 479, 467, 466, 460, 453, 456, 451, 440, 452, 443, 447, 438, 436, 429, 428, 431, 424, 424, 419, 418, 422, 414, 416, 412, 409, 408, 410, 404, 397, 406, 404, 398, 395, 400, 396, 393, 391, 383, 387, 394, 387, 383, 393, 388, 385, 380, 377, 381, 380, 376, 379, 379, 377, 378, 375, 373, 377, 375, 379, 374, 376, 370, 371, 376, 367, 370, 372, 362, 368, 373, 368, 374, 363, 362, 366, 364, 363, 364, 368, 362, 360, 361, 363, 362, 366, 366, 363, 366, 369, 362, 358, 360, 365, 362, 368, 356, 360, 363, 352, 359, 362, 351, 379, 391, 410, 418, 434, 440, 463, 464, 470, 478, 588, 487, 497, 500, 508, 515, 513, 521, 520, 522, 530, 534, 531, 537, 536, 538, 550, 544, 532, 547, 549, 550, 554, 549, 552, 559, 571, 575, 579, 582, 586, 590, 602, 601, 609, 610, 621, 617, 629, 629, 634, 640, 648, 649, 654, 660, 660, 662, 663, 670, 674, 674, 673, 679, 686, 676, 685, 687, 783, 695, 703, 702, 702, 706, 708, 707, 708, 709, 718, 717, 722, 712, 721, 721, 721, 726, 725, 733, 732, 738, 732, 743, 744, 743, 742, 735, 743, 749, 765, 774, 777, 783, 793, 805, 811, 807, 824, 824, 834, 831, 837, 840, 851, 853, 855, 860, 861, 861, 853, 844, 835, 825, 811, 808, 794, 794, 781, 770, 764, 754, 753, 745, 742, 729, 731, 717, 718, 713, 711, 702, 693, 681, 683, 690, 679, 669, 677, 668, 663, 649, 658, 649, 641, 641, 643, 642, 632, 630, 631, 628, 622, 621, 617, 610, 598, 604, 599, 596, 590, 595, 595, 590, 587, 588, 582, 576, 584, 584, 581, 582, 595, 593, 601, 597, 605, 604, 611, 622, 620, 623, 633, 627, 630, 634, 641, 637, 639, 646, 647, 648, 657, 655, 653, 668, 669, 669, 671, 672, 674, 673, 676, 680, 683, 681, 686, 690, 693, 695, 693, 691, 694, 695, 703, 703, 708, 701, 708, 700, 739, 767, 785, 806, 822, 847, 852, 865, 881, 902, 897, 917, 927, 928, 940, 941, 956, 958, 959, 963, 969, 967, 975, 981, 985, 981, 981, 985, 990, 985, 990, 992, 971, 955, 929, 918, 896, 878, 855, 838, 823, 812, 794, 779, 770, 751, 741, 727, 717, 705, 693, 679, 666, 660, 648, 638, 630, 626, 611, 606, 595, 585, 579, 572, 568, 559, 551, 551, 545, 540, 534, 526, 516, 510, 512, 501, 496, 494, 487, 486, 477, 473, 473, 469, 460, 464, 457, 454, 455, 454, 447, 442, 441, 439, 428, 431, 424, 428, 430, 419, 424, 427, 419, 415, 411, 414, 410, 412, 410, 405, 409, 402, 405, 402, 392, 395, 397, 393, 398, 394, 388, 391, 392, 386, 393, 388, 390, 379, 392, 384, 381, 382, 379, 384, 384, 383, 374, 370, 374, 376, 373, 379, 381, 367, 369, 375, 365, 372, 371, 373, 373, 371, 365, 368, 369, 372, 367, 366, 371, 368, 368, 367, 363, 371, 370, 364, 366, 364, 371, 365, 365, 368, 366, 364, 379, 405, 414, 428, 445, 459, 459, 464, 480, 482, 492, 496, 493, 501, 503, 507, 510, 514, 515, 514, 517, 518, 520, 527, 527, 526, 526, 527, 529, 529, 527, 528, 525, 533, 538, 523, 517, 515, 509, 498, 496, 492, 488, 483, 482, 471, 471, 463, 460, 467, 460, 454, 450, 451, 444, 440, 431, 437, 438, 439, 426, 426, 427, 423, 430, 426, 426, 414, 421, 418, 409, 409, 411, 410, 402, 407, 406, 400, 402, 399, 397, 396, 395, 398, 389, 383, 386, 382, 388, 388, 389, 399, 386, 383, 378, 388, 380, 381, 378, 376, 378, 379, 378, 375, 371, 380, 379, 373, 370, 374, 371, 368, 377, 371, 380, 362, 371, 373, 372, 363, 375, 366, 373, 365, 375, 363, 364, 373, 371, 367, 364, 363, 373, 368, 363, 369, 367, 368, 365, 365, 365, 368, 367, 362, 369, 369, 369, 366, 358, 367, 367, 360, 360, 367, 356, 364, 357, 364, 365, 361, 361, 359, 361, 363, 370, 359, 360, 360, 362, 361, 360, 356, 364, 359, 366, 359, 359, 366, 362, 363, 360, 362, 366, 357, 365, 361, 358, 360, 369, 361, 354, 355, 369, 361, 353, 355, 366, 364, 360, 354, 358, 364, 361, 365, 355, 361, 359, 358, 360, 361, 362, 364, 365, 362, 364, 360, 362, 354, 355, 365, 363, 361, 361, 367, 365, 363, 361, 366, 363, 363, 363, 356, 358, 359, 361, 363, 359, 359, 359, 362, 368, 368, 360, 356, 358, 362, 362, 366, 358, 363, 359, 358, 365, 358, 362, 361, 360, 364, 358, 357, 367, 362, 355, 364, 364, 360, 362, 360, 365, 357, 350, 360, 360, 367, 356, 367, 366, 357, 355, 355, 363, 365, 363, 360, 361, 364, 355, 358, 371, 356, 358, 358, 363, 373, 367, 364, 360, 360, 352, 362, 363, 357, 358, 358, 354, 361, 364, 359, 361, 365, 362, 362, 372, 354, 359, 359, 357, 366, 361, 357, 363, 366, 363, 365, 351, 365, 362, 364, 366, 363, 372, 363, 371, 366, 362, 366, 368, 359, 362, 358, 369, 365, 363, 370, 367, 363, 365, 365, 367, 363, 361, 363, 362, 367, 366, 367, 364, 365, 362, 361, 374, 371, 364, 365, 365, 365, 372, 365, 360, 360, 372, 364, 368, 371, 364, 367, 371, 367, 360, 364, 363, 368, 369, 367, 369, 370, 361, 363, 369, 360, 370, 372, 364, 359, 368, 374, 369, 363, 364, 371, 373, 360, 366, 357, 370, 366, 365, 364, 370, 367, 359, 367, 366, 368, 365, 368, 368, 364, 366, 363, 367, 362, 369, 365, 362, 362, 360, 369, 362, 366, 364, 360, 363, 361, 368, 362, 363, 371, 366, 372, 364, 365, 370, 366, 366, 368, 365, 366, 366, 363, 365, 362, 364, 370, 369, 367, 362, 358, 364, 371, 356, 366, 363, 372, 362, 368, 368, 366, 365, 364, 362, 369, 364, 367, 371, 365, 366, 368, 368, 368, 369, 371, 376, 373, 365, 369, 371, 370, 368, 366, 362, 377, 361, 368, 371, 362, 362, 366, 367, 369, 362, 371, 371, 361, 369, 366, 376, 372, 364, 378, 363, 361, 368, 368, 364, 363, 373, 363, 371, 371, 367, 363, 365, 372, 368, 369, 366, 363, 368, 366, 369, 365, 362, 374, 365, 366, 361, 363, 365, 365, 362, 364, 366, 370, 368, 361, 373, 370, 364, 362, 368, 364, 371, 365, 367, 358, 365, 364, 359, 364, 367, 365, 369, 364, 361, 361, 368, 370, 371, 362, 366, 361, 361, 363, 360, 365, 362, 364, 365, 366, 368, 356, 369, 363, 368, 370, 367, 364, 365, 361, 364, 366, 367, 362, 370, 363, 367, 361, 375, 363, 360, 363, 369, 367, 363, 358, 361, 363, 367, 366, 365, 363, 373, 367, 367, 372, 368, 365, 363, 364, 366, 367, 367, 361, 359, 362, 368, 359, 362, 363, 364, 365, 362, 369, 361, 368, 367, 367, 366, 373, 367, 366, 370, 370, 370, 367, 368, 365, 360, 365, 354, 359, 368, 360, 366, 363, 364, 360, 366, 368, 363, 369, 363, 366, 363, 371, 369, 362, 368, 361, 362, 367, 362, 379, 383, 405, 410, 422, 426, 439, 449, 454, 470, 482, 491, 490, 506, 513, 527, 527, 532, 546, 554, 553, 568, 560, 577, 582, 587, 588, 599, 598, 608, 614, 621, 620, 626, 634, 640, 648, 649, 652, 655, 652, 657, 661, 674, 669, 674, 678, 684, 679, 685, 689, 690, 701, 699, 700, 705, 703, 707, 712, 706, 713, 725, 714, 724, 729, 718, 863, 733, 728, 730, 738, 725, 731, 739, 745, 745, 740, 742, 743, 751, 748, 756, 754, 754, 754, 852, 786, 814, 821, 840, 853, 861, 875, 884, 893, 898, 904, 915, 920, 925, 932, 944, 949, 942, 942, 956, 958, 953, 957, 936, 922, 903, 877, 868, 850, 834, 817, 805, 790, 772, 764, 748, 732, 724, 714, 697, 682, 680, 664, 653, 651, 635, 629, 622, 607, 603, 590, 592, 577, 569, 562, 561, 545, 541, 541, 532, 533, 532, 518], "metrics": {"mae": [["Firmware rule", 2.2217324414715716], ["Persistence", 1.343264214046823], ["Random Forest", 0.9230757384769422], ["Linear Reg. (deployed)", 0.8963039297135508]], "acc_rule": 0.9812709030100334, "acc_ml": 0.9899665551839465}};const TH=50,K=5;
+const $=i=>document.getElementById(i);
+$("tb").innerHTML=D.metrics.mae.map((m,i)=>`<tr><td${i==3?' class="best b"':''}>${m[0]}</td><td class="b${i==3?' best':''}">${m[1].toFixed(2)}</td></tr>`).join("");
+$("a1").textContent=(D.metrics.acc_rule*100).toFixed(1)+"%";$("a2").textContent=(D.metrics.acc_ml*100).toFixed(1)+"%";
+$("eq").textContent="T(+5s) = "+D.b.toFixed(3)+D.w.map((w,i)=>(w<0?" − ":" + ")+Math.abs(w).toFixed(3)+"·"+D.f[i]).join("");
+let hist=[],series=[],i=0,run=true,T=29,src=30,n=0,ra=0,ew=0,timer;
+function adc(t){let v=t*10+(Math.random()-.5)*7;return Math.max(0,Math.min(4095,Math.round(v/3300*4095)))}
+function step(){
+  const m=$("mode").value;
+  if(m=="a"){fetch("api/latest").then(r=>r.json()).then(j=>{if(j.raw_adc!=null)proc(j.raw_adc)}).catch(()=>{});return}
+  let raw;
+  if(m=="r"){raw=D.raw[i%D.raw.length];i++}
+  else{src=+$("ms").value;T+=(src-T)/(src>T?10:30);raw=adc(T)}
+  proc(raw)}
+function proc(raw){
+  const t=raw*330/4095,prev=hist.length?hist[hist.length-1]:t;hist.push(t);if(hist.length>6)hist.shift();
+  const d1=t-prev,d3=hist.length>=4?t-hist[hist.length-4]:0,m5=hist.slice(-5).reduce((a,b)=>a+b,0)/Math.min(hist.length,5);
+  const x=[t,d1,d3,m5],ml=D.b+x.reduce((s,v,j)=>s+v*D.w[j],0),fw=t+K*d1;
+  const red=ml>TH,fred=fw>TH;n++;if(red)ra++;if(red&&!fred)ew++;
+  series.push({t,fw,ml});if(series.length>120)series.shift();
+  $("t").innerHTML=t.toFixed(1)+'<span class="u"> °C</span>';$("rw").textContent="ADC "+raw+" · "+(raw*3300/4095).toFixed(0)+" mV";
+  $("fw").innerHTML=fw.toFixed(1)+'<span class="u"> °C</span>';$("ml").innerHTML=ml.toFixed(1)+'<span class="u"> °C</span>';$("dr").textContent="drift "+(d1>=0?"+":"")+d1.toFixed(2)+" °C/s";
+  $("lg").className="led"+(red?"":" g1");$("lr").className="led"+(red?" r1":"");
+  const s=$("st");s.textContent=red?"WARNING_DERATE":"NORMAL";s.style.background=red?"var(--bad)":"var(--ok)";
+  $("n").textContent=n;$("ra").textContent=ra;$("ew").textContent=ew;draw();
+}
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+function draw(){
+  const c=$("cv"),r=devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight;c.width=W*r;c.height=H*r;const g=c.getContext("2d");g.scale(r,r);
+  const lo=15,hi=Math.max(90,...series.map(s=>Math.max(s.t,s.fw,s.ml))),Y=v=>H-24-(v-lo)/(hi-lo)*(H-34),X=k=>40+k/119*(W-50);
+  g.font="11px sans-serif";g.fillStyle=css("--mut");g.strokeStyle=css("--line");
+  for(let v=20;v<=hi;v+=10){g.beginPath();g.moveTo(40,Y(v));g.lineTo(W-6,Y(v));g.stroke();g.fillText(v+"°",8,Y(v)+4)}
+  g.strokeStyle=css("--bad");g.setLineDash([6,4]);g.beginPath();g.moveTo(40,Y(TH));g.lineTo(W-6,Y(TH));g.stroke();g.setLineDash([]);
+  [["fw","--acc"],["ml","--ml"],["t","--cy"]].forEach(([k,col])=>{g.strokeStyle=css(col);g.lineWidth=k=="t"?2.5:1.8;g.beginPath();
+    series.forEach((s,j)=>{const y=Y(Math.min(hi,Math.max(lo,s[k])));j?g.lineTo(X(j),y):g.moveTo(X(j),y)});g.stroke()});g.lineWidth=1;
+}
+function loop(){clearTimeout(timer);timer=setTimeout(()=>{if(run)step();loop()},+$("sp").value)}
+$("pl").onclick=()=>{run=!run;$("pl").textContent=run?"Pause":"Resume"};
+$("mode").onchange=()=>{$("mw").hidden=$("mode").value!="m";hist=[];series=[];if($("mode").value=="m")T=hist.length?T:29};
+$("ms").oninput=()=>$("mv").textContent=$("ms").value;$("sp").onchange=loop;
+$("th").onclick=()=>{const r=document.documentElement,d=r.dataset.theme=="dark"||(!r.dataset.theme&&matchMedia("(prefers-color-scheme:dark)").matches);r.dataset.theme=d?"light":"dark";draw()};
+addEventListener("resize",draw);loop();
+</script></body></html>
